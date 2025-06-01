@@ -10,6 +10,7 @@ function App() {
         <Input type="username" placeholder="Username"/>
         <Input type="email" placeholder="Email"/>
         <Input type="password" placeholder="Password"/>
+       <Button>Signup</Button> 
     </div>
   )
 }
