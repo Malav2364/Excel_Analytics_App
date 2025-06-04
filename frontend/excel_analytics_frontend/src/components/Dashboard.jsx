@@ -3,7 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { ThemeToggle } from './ui/theme-toggle';
+import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
 import authService from '../services/authService';
+
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -62,23 +70,44 @@ function Dashboard() {
       <nav className="bg-card shadow-md dark:bg-black dark:border-b dark:border-green-800">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center">
+            <div className="flex items-center gap-4">
               <h1 className="text-xl font-bold text-green-700 dark:text-green-400">
                 ExcelAnalytics
               </h1>
-              <span className="ml-4 text-green-600 dark:text-green-400">
-                Welcome, {user?.username}
-              </span>
+              {user && (
+                <p className="text-sm text-green-600 dark:text-green-500">
+                  Welcome back, <span className="font-medium">{user.username}</span>
+                </p>
+              )}
             </div>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
-              <Button 
-                variant="ghost"
-                onClick={handleLogout}
-                className="text-green-700 hover:text-green-800 dark:text-green-400"
-              >
-                Logout
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={`https://avatar.vercel.sh/${user?.username}.png`} alt={user?.username} />
+                      <AvatarFallback>{user?.username?.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <div className="flex items-center justify-start gap-2 p-2">
+                    <div className="flex flex-col space-y-1 leading-none">
+                      <p className="font-medium text-sm text-green-700 dark:text-green-400">{user?.username}</p>
+                      <p className="w-[200px] truncate text-xs text-muted-foreground">
+                        {user?.email || 'User'}
+                      </p>
+                    </div>
+                  </div>
+                  <DropdownMenuItem 
+                    className="text-red-600 cursor-pointer focus:text-red-600" 
+                    onClick={handleLogout}
+                  >
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
