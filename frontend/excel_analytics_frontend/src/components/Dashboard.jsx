@@ -1,11 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
+import { ThemeToggle } from './ui/theme-toggle';
+import authService from '../services/authService';
 
 function Dashboard() {
+  const navigate = useNavigate();
   const [files, setFiles] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const currentUser = authService.getCurrentUser();
+    if (currentUser) {
+      setUser(currentUser);
+    } else {
+      navigate('/login');
+    }
+  }, [navigate]);
+
+  useEffect(() => {
+    const currentUser = authService.getCurrentUser();
+    if (currentUser) {
+      setUser(currentUser);
+    }
+  }, []);
 
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
@@ -30,27 +51,61 @@ function Dashboard() {
     }
   };
 
+  const handleLogout = () => {
+    authService.logout();
+    navigate('/login');
+  };
+
   return (
-    <div className="container mx-auto p-4">
-      {/* File Upload Section */}
-      <Card className="mb-6 p-4">
-        <h2 className="text-2xl font-bold mb-4">Upload Excel File</h2>
-        <div className="flex items-center gap-4">
-          <input
-            type="file"
-            accept=".xls,.xlsx"
-            onChange={handleFileUpload}
-            className="hidden"
-            id="file-upload"
-          />
-          <label htmlFor="file-upload">
-            <Button as="span" variant="outline">
-              Choose File
-            </Button>
-          </label>
-          {loading && <span>Uploading...</span>}
+    <div className="min-h-screen bg-background">
+      {/* Navigation Bar */}
+      <nav className="bg-card shadow-md dark:bg-black dark:border-b dark:border-green-800">
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <h1 className="text-xl font-bold text-green-700 dark:text-green-400">
+                ExcelAnalytics
+              </h1>
+              <span className="ml-4 text-green-600 dark:text-green-400">
+                Welcome, {user?.username}
+              </span>
+            </div>
+            <div className="flex items-center space-x-4">
+              <ThemeToggle />
+              <Button 
+                variant="ghost"
+                onClick={handleLogout}
+                className="text-green-700 hover:text-green-800 dark:text-green-400"
+              >
+                Logout
+              </Button>
+            </div>
+          </div>
         </div>
-      </Card>
+      </nav>
+
+      <div className="container mx-auto p-4">
+        {/* File Upload Section */}
+        <Card className="mb-6 p-4">
+          <h2 className="text-2xl font-bold mb-4 text-green-700 dark:text-green-400">
+            Upload Excel File
+          </h2>
+          <div className="flex items-center gap-4">
+            <input
+              type="file"
+              accept=".xls,.xlsx"
+              onChange={handleFileUpload}
+              className="hidden"
+              id="file-upload"
+            />
+            <label htmlFor="file-upload">
+              <Button variant="outline" className="border-green-200 text-green-700 dark:border-green-800 dark:text-green-400">
+                Choose File
+              </Button>
+            </label>
+            {loading && <span className="text-green-600 dark:text-green-400">Uploading...</span>}
+          </div>
+        </Card>
 
       {/* Recent Files Section */}
       <Card className="mb-6 p-4">
@@ -94,6 +149,7 @@ function Dashboard() {
           </div>
         </Card>
       )}
+    </div>
     </div>
   );
 }

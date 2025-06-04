@@ -29,12 +29,8 @@ function LoginPage() {
     setLoading(true);
 
     try {
-      const { success, message } = await authService.login(formData.email, formData.password);
-
-      if (!success) {
-        throw new Error(message || 'Login failed');
-      }
-
+      await authService.login(formData.email, formData.password);
+      
       // Redirect to dashboard
       navigate('/dashboard');
     } catch (err) {
