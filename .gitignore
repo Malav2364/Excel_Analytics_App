@@ -1,1 +1,31 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment variables
 .env
+.env.local
+.env.*.local
+
+# Build directories
+dist/
+build/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Runtime data
+uploads/
+pids/
+*.pid
+*.seed
+*.pid.lock
