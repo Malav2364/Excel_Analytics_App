@@ -1,7 +1,9 @@
 import express from 'express';
 import { auth } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
-import * as xlsx from 'xlsx';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const XLSX = require('xlsx');
 import File from '../models/File.js';
 import fs from 'fs';
 import { promisify } from 'util';
@@ -33,7 +35,7 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
     // Read the Excel file
     let workbook;
     try {
-      workbook = xlsx.readFile(req.file.path);
+      workbook = XLSX.readFile(req.file.path);
     } catch (err) {
       throw new Error(`Failed to read Excel file: ${err.message}`);
     }
@@ -46,7 +48,7 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
     const worksheet = workbook.Sheets[sheetName];
     
     // Convert to JSON
-    const data = xlsx.utils.sheet_to_json(worksheet, { 
+    const data = XLSX.utils.sheet_to_json(worksheet, { 
       raw: false,
       defval: '' // Return empty string for empty cells
     });
