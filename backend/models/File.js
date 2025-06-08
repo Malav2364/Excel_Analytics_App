@@ -32,10 +32,21 @@ const fileSchema = new mongoose.Schema({
       enum: ['bar', 'line', 'pie'],
       required: true
     },
-    title: String,
-    xAxis: String,
-    yAxis: String,
-    data: Object
+    xAxis: {
+      type: String,
+      required: true
+    },
+    yAxis: {
+      type: String,
+      required: true
+    },
+    name: {
+      type: String,
+      required: true
+    },
+    data: {
+      type: Object
+    }
   }],
   createdAt: {
     type: Date,

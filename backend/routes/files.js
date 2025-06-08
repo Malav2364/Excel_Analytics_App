@@ -83,6 +83,7 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
       fileName: file.fileName,
       fileSize: file.fileSize,
       headers: file.headers,
+      data: file.data, // Include the data in the response
       createdAt: file.createdAt
     });
   } catch (error) {
@@ -125,7 +126,7 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
 router.get('/files', auth, async (req, res) => {
   try {
     const files = await File.find({ uploadedBy: req.user.id })
-      .select('fileName fileSize createdAt')
+      .select('fileName fileSize createdAt headers _id') // Ensure headers and _id are selected
       .sort({ createdAt: -1 });
     res.json(files);
   } catch (error) {
@@ -169,6 +170,116 @@ router.delete('/files/:id', auth, async (req, res) => {
   } catch (error) {
     console.error('Error deleting file:', error);
     res.status(500).json({ message: 'Error deleting file' });
+  }
+});
+
+// Get file charts
+router.get('/:fileId/charts', auth, async (req, res) => {
+  try {
+    const file = await File.findById(req.params.fileId);
+    if (!file) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    // Check if user has access to the file
+    if (file.uploadedBy.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    res.json(file.charts);
+  } catch (error) {
+    res.status(500).json({ message: 'Error retrieving charts', error: error.message });
+  }
+});
+
+// Add a new chart to file
+router.post('/:fileId/charts', auth, async (req, res) => {
+  try {
+    const file = await File.findById(req.params.fileId);
+    if (!file) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    // Check if user has access to the file
+    if (file.uploadedBy.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const { type, xAxis, yAxis, name } = req.body;
+
+    // Validate chart configuration
+    if (!type || !xAxis || !yAxis || !name) {
+      return res.status(400).json({ message: 'Missing required chart configuration' });
+    }
+
+    // Add new chart
+    file.charts.push({ type, xAxis, yAxis, name });
+    await file.save();
+
+    res.json(file.charts[file.charts.length - 1]);
+  } catch (error) {
+    res.status(500).json({ message: 'Error adding chart', error: error.message });
+  }
+});
+
+// Update a chart
+router.put('/:fileId/charts/:chartId', auth, async (req, res) => {
+  try {
+    const file = await File.findById(req.params.fileId);
+    if (!file) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    // Check if user has access to the file
+    if (file.uploadedBy.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const { type, xAxis, yAxis, name } = req.body;
+
+    // Validate chart configuration
+    if (!type || !xAxis || !yAxis || !name) {
+      return res.status(400).json({ message: 'Missing required chart configuration' });
+    }
+
+    // Find and update chart
+    const chart = file.charts.id(req.params.chartId);
+    if (!chart) {
+      return res.status(404).json({ message: 'Chart not found' });
+    }
+
+    chart.type = type;
+    chart.xAxis = xAxis;
+    chart.yAxis = yAxis;
+    chart.name = name;
+
+    await file.save();
+    res.json(chart);
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating chart', error: error.message });
+  }
+});
+
+// Delete a chart
+router.delete('/:fileId/charts/:chartId', auth, async (req, res) => {
+  try {
+    const file = await File.findById(req.params.fileId);
+    if (!file) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    // Check if user has access to the file
+    if (file.uploadedBy.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Remove chart
+    file.charts.pull(req.params.chartId);
+    await file.save();
+
+    res.json({ message: 'Chart deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting chart', error: error.message });
   }
 });
 

@@ -12,6 +12,16 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import authService from '../services/authService';
+import {
+  getCharts,
+  addChart,
+  updateChart,
+  deleteChart,
+} from '../services/api';
+import BarChart from './charts/BarChart';
+import LineChart from './charts/LineChart';
+import PieChart from './charts/PieChart';
+import ChartConfig from './charts/ChartConfig';
 
 
 function Dashboard() {
@@ -20,6 +30,9 @@ function Dashboard() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(null);
+  const [charts, setCharts] = useState([]);
+  const [showChartDialog, setShowChartDialog] = useState(false);
+  const [editingChart, setEditingChart] = useState(null);
 
   useEffect(() => {
     const currentUser = authService.getCurrentUser();
@@ -53,6 +66,22 @@ function Dashboard() {
       fetchFiles();
     }
   }, []);
+
+  // Fetch charts when a file is selected
+  useEffect(() => {
+    if (selectedFile) {
+      const fetchCharts = async () => {
+        try {
+          const fetchedCharts = await getCharts(selectedFile._id);
+          setCharts(fetchedCharts);
+        } catch (error) {
+          console.error('Error fetching charts:', error);
+          toast.error('Failed to load charts');
+        }
+      };
+      fetchCharts();
+    }
+  }, [selectedFile]);
 
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
@@ -152,6 +181,48 @@ function Dashboard() {
   const handleLogout = () => {
     authService.logout();
     navigate('/login');
+  };
+
+  const handleAddChart = async (config) => {
+    try {
+      const newChart = await addChart(selectedFile._id, {
+        ...config,
+        name: `${config.type} chart of ${config.yAxis} by ${config.xAxis}`
+      });
+      setCharts([...charts, newChart]);
+      toast.success('Chart added successfully');
+      setShowChartDialog(false);
+    } catch (error) {
+      console.error('Error adding chart:', error);
+      toast.error('Failed to add chart');
+    }
+  };
+
+  const handleUpdateChart = async (chartId, config) => {
+    try {
+      const updatedChart = await updateChart(selectedFile._id, chartId, {
+        ...config,
+        name: `${config.type} chart of ${config.yAxis} by ${config.xAxis}`
+      });
+      setCharts(charts.map(chart => 
+        chart._id === chartId ? updatedChart : chart
+      ));
+      toast.success('Chart updated successfully');
+    } catch (error) {
+      console.error('Error updating chart:', error);
+      toast.error('Failed to update chart');
+    }
+  };
+
+  const handleDeleteChart = async (chartId) => {
+    try {
+      await deleteChart(selectedFile._id, chartId);
+      setCharts(charts.filter(chart => chart._id !== chartId));
+      toast.success('Chart deleted successfully');
+    } catch (error) {
+      console.error('Error deleting chart:', error);
+      toast.error('Failed to delete chart');
+    }
   };
 
   return (
@@ -285,15 +356,85 @@ function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <h3 className="font-semibold mb-2">Create New Chart</h3>
-              {/* Chart creation form will go here */}
+              <Button
+                onClick={() => {
+                  if (selectedFile && selectedFile.headers && selectedFile.headers.length > 0) {
+                    setEditingChart(null); // Ensure editingChart is null for new chart
+                    setShowChartDialog(true);
+                  } else {
+                    toast.error("Please select a file with valid data and headers to create a chart.");
+                  }
+                }}
+                className="w-full mb-4 bg-green-600 hover:bg-green-700 text-white"
+                disabled={!selectedFile || !selectedFile.headers || selectedFile.headers.length === 0}
+              >
+                Create New Chart
+              </Button>
+              {showChartDialog && selectedFile && selectedFile.headers && (
+                <Card className="p-4">
+                  <ChartConfig
+                    data={selectedFile.data} // selectedFile.data should also be checked or handled gracefully in ChartConfig
+                    config={editingChart || {
+                      type: 'bar',
+                      // Provide default empty strings if headers are not available or less than 2,
+                      // ChartConfig's useEffect should handle setting defaults from columns.
+                      xAxis: selectedFile.headers && selectedFile.headers.length > 0 ? selectedFile.headers[0] : '',
+                      yAxis: selectedFile.headers && selectedFile.headers.length > 1 ? selectedFile.headers[1] : (selectedFile.headers && selectedFile.headers.length > 0 ? selectedFile.headers[0] : ''),
+                      name: '', // Default name for a new chart
+                    }}
+                    onCancel={() => {
+                      setShowChartDialog(false);
+                      setEditingChart(null);
+                    }}
+                    onConfigChange={(config) => {
+                      if (editingChart) {
+                        handleUpdateChart(editingChart._id, config);
+                      } else {
+                        handleAddChart(config);
+                      }
+                      setShowChartDialog(false);
+                      setEditingChart(null);
+                    }}
+                  />
+                </Card>
+              )}
             </div>
             <div>
               <h3 className="font-semibold mb-2">Existing Charts</h3>
               <div className="grid gap-4">
-                {selectedFile.charts?.map((chart) => (
+                {charts.map((chart) => (
                   <Card key={chart._id} className="p-4">
-                    <h4>{chart.title}</h4>
-                    {/* Chart visualization will go here */}
+                    <h4>{chart.name}</h4>
+                    {chart.type === 'bar' && (
+                      <BarChart data={selectedFile.data} config={chart} />
+                    )}
+                    {chart.type === 'line' && (
+                      <LineChart data={selectedFile.data} config={chart} />
+                    )}
+                    {chart.type === 'pie' && (
+                      <PieChart data={selectedFile.data} config={chart} />
+                    )}
+                    <div className="flex justify-end gap-2 mt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setShowChartDialog(true);
+                          setEditingChart(chart);
+                        }}
+                        className="text-green-600 hover:text-green-700"
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteChart(chart._id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        Delete
+                      </Button>
+                    </div>
                   </Card>
                 ))}
               </div>

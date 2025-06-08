@@ -52,4 +52,30 @@ api.interceptors.response.use(
     }
 );
 
-export default api;
+const getCharts = async (fileId) => {
+    const response = await api.get(`/excel/files/${fileId}/charts`);
+    return response.data;
+};
+
+const addChart = async (fileId, chartConfig) => {
+    const response = await api.post(`/excel/files/${fileId}/charts`, chartConfig);
+    return response.data;
+};
+
+const updateChart = async (fileId, chartId, chartConfig) => {
+    const response = await api.put(`/excel/files/${fileId}/charts/${chartId}`, chartConfig);
+    return response.data;
+};
+
+const deleteChart = async (fileId, chartId) => {
+    const response = await api.delete(`/excel/files/${fileId}/charts/${chartId}`);
+    return response.data;
+};
+
+export {
+    api as default,
+    getCharts,
+    addChart,
+    updateChart,
+    deleteChart,
+};
