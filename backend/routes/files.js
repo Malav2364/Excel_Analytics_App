@@ -174,50 +174,128 @@ router.delete('/files/:id', auth, async (req, res) => {
 });
 
 // Get file charts
-router.get('/:fileId/charts', auth, async (req, res) => {
+router.get('/files/:fileId/charts', auth, async (req, res) => {
   try {
+    console.log('Fetching charts for file:', req.params.fileId);
     const file = await File.findById(req.params.fileId);
     if (!file) {
+      console.log('File not found:', req.params.fileId);
       return res.status(404).json({ message: 'File not found' });
     }
 
     // Check if user has access to the file
     if (file.uploadedBy.toString() !== req.user.id) {
+      console.log('Access denied for user:', req.user.id);
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    res.json(file.charts);
+    console.log('Charts found:', file.charts);
+    res.json(file.charts || []);
   } catch (error) {
+    console.error('Error retrieving charts:', error);
     res.status(500).json({ message: 'Error retrieving charts', error: error.message });
   }
 });
 
 // Add a new chart to file
-router.post('/:fileId/charts', auth, async (req, res) => {
+router.post('/files/:fileId/charts', auth, async (req, res) => {
   try {
+    console.log('Adding chart to file:', req.params.fileId);
+    console.log('Chart data:', req.body);
+
     const file = await File.findById(req.params.fileId);
     if (!file) {
+      console.log('File not found:', req.params.fileId);
       return res.status(404).json({ message: 'File not found' });
     }
 
     // Check if user has access to the file
     if (file.uploadedBy.toString() !== req.user.id) {
+      console.log('Access denied for user:', req.user.id);
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const { type, xAxis, yAxis, name } = req.body;
+    const { type, xAxis, yAxis, zAxis, name } = req.body;
 
     // Validate chart configuration
     if (!type || !xAxis || !yAxis || !name) {
+      console.log('Missing required chart configuration');
       return res.status(400).json({ message: 'Missing required chart configuration' });
     }
 
-    // Add new chart
-    file.charts.push({ type, xAxis, yAxis, name });
-    await file.save();
+    // Validate that the axes exist in the data
+    if (!file.headers.includes(xAxis) || !file.headers.includes(yAxis) || (zAxis && !file.headers.includes(zAxis))) {
+      console.log('Invalid axis selection');
+      return res.status(400).json({ message: 'Invalid axis selection' });
+    }
 
-    res.json(file.charts[file.charts.length - 1]);
+    // Create chart data first
+    const chartData = {
+      type,
+      xAxis,
+      yAxis,
+      name,
+      data: {}
+    };
+
+    // Add zAxis if present
+    if (zAxis) {
+      chartData.zAxis = zAxis;
+    }
+
+    // Process the data based on chart type
+    try {
+      // Extract unique values for x-axis
+      const xValues = [...new Set(file.data.map(item => item[xAxis]))].filter(Boolean);
+      
+      if (xValues.length === 0) {
+        console.log('No valid data found for x-axis');
+        return res.status(400).json({ message: 'No valid data found for x-axis' });
+      }
+
+      // Calculate y-axis values
+      const yValues = xValues.map(xValue => {
+        const filteredData = file.data.filter(item => item[xAxis] === xValue);
+        const sum = filteredData.reduce((acc, item) => {
+          const value = parseFloat(item[yAxis]);
+          return acc + (isNaN(value) ? 0 : value);
+        }, 0);
+        return sum;
+      });
+
+      // For 3D charts, process z-axis data
+      if (zAxis) {
+        const zValues = xValues.map(xValue => {
+          const filteredData = file.data.filter(item => item[xAxis] === xValue);
+          const sum = filteredData.reduce((acc, item) => {
+            const value = parseFloat(item[zAxis]);
+            return acc + (isNaN(value) ? 0 : value);
+          }, 0);
+          return sum;
+        });
+        chartData.data = { x: xValues, y: yValues, z: zValues };
+      } else {
+        chartData.data = { x: xValues, y: yValues };
+      }
+
+      // Validate processed data
+      if (chartData.data.x.length === 0 || chartData.data.y.length === 0) {
+        console.log('Failed to process chart data');
+        return res.status(400).json({ message: 'Failed to process chart data' });
+      }
+
+      // Add the processed chart to the file
+      file.charts.push(chartData);
+      await file.save();
+
+      console.log('Chart added successfully');
+      res.json(file.charts[file.charts.length - 1]);
+    } catch (error) {
+      console.error('Error processing chart data:', error);
+      res.status(500).json({ message: 'Error processing chart data', error: error.message });
+    }
   } catch (error) {
+    console.error('Error adding chart:', error);
     res.status(500).json({ message: 'Error adding chart', error: error.message });
   }
 });

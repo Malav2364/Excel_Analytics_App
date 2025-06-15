@@ -29,7 +29,7 @@ const fileSchema = new mongoose.Schema({
   charts: [{
     type: {
       type: String,
-      enum: ['bar', 'line', 'pie'],
+      enum: ['bar', 'line', 'pie', 'bar3d', 'scatter3d'],
       required: true
     },
     xAxis: {
@@ -39,6 +39,10 @@ const fileSchema = new mongoose.Schema({
     yAxis: {
       type: String,
       required: true
+    },
+    zAxis: {
+      type: String,
+      required: false
     },
     name: {
       type: String,

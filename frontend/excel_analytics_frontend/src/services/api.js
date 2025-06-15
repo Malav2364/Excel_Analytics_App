@@ -72,10 +72,16 @@ const deleteChart = async (fileId, chartId) => {
     return response.data;
 };
 
+const getFileById = async (fileId) => {
+    const response = await api.get(`/excel/files/${fileId}`);
+    return response.data;
+};
+
 export {
     api as default,
     getCharts,
     addChart,
     updateChart,
     deleteChart,
+    getFileById,
 };
