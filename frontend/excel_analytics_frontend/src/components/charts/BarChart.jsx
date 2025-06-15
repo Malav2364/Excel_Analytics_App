@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react'; // Import forwardRef
 import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -19,7 +19,7 @@ ChartJS.register(
   Legend
 );
 
-const BarChart = ({ data, config }) => {
+const BarChart = forwardRef(({ data, config }, ref) => { // Use forwardRef and accept ref
   const chartData = {
     labels: data.map(item => item[config.xAxis]),
     datasets: [
@@ -35,6 +35,15 @@ const BarChart = ({ data, config }) => {
 
   const options = {
     responsive: true,
+    maintainAspectRatio: false, // Allow chart to fill container better
+    layout: { // Add padding around the chart
+      padding: {
+        top: 20,
+        right: 20,
+        bottom: 20,
+        left: 20
+      }
+    },
     plugins: {
       legend: {
         position: 'top',
@@ -46,7 +55,7 @@ const BarChart = ({ data, config }) => {
     },
   };
 
-  return <Bar data={chartData} options={options} />;
-};
+  return <Bar ref={ref} data={chartData} options={options} />; // Pass the ref to the Bar component
+});
 
 export default BarChart;

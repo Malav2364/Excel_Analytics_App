@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react'; // Import forwardRef
 import { Pie } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -13,7 +13,7 @@ ChartJS.register(
   Legend
 );
 
-const PieChart = ({ data, config }) => {
+const PieChart = forwardRef(({ data, config }, ref) => { // Use forwardRef
   const chartData = {
     labels: data.map(item => item[config.xAxis]),
     datasets: [
@@ -53,7 +53,7 @@ const PieChart = ({ data, config }) => {
     },
   };
 
-  return <Pie data={chartData} options={options} />;
-};
+  return <Pie ref={ref} data={chartData} options={options} />; // Pass ref
+});
 
 export default PieChart;

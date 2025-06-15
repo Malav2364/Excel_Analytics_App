@@ -245,43 +245,62 @@ router.post('/files/:fileId/charts', auth, async (req, res) => {
 
     // Process the data based on chart type
     try {
-      // Extract unique values for x-axis
-      const xValues = [...new Set(file.data.map(item => item[xAxis]))].filter(Boolean);
-      
-      if (xValues.length === 0) {
-        console.log('No valid data found for x-axis');
-        return res.status(400).json({ message: 'No valid data found for x-axis' });
-      }
+      if (type === 'scatter') {
+        // For scatter plots, we want individual data points
+        const points = file.data.map(item => ({
+          x: parseFloat(item[xAxis]), // Ensure numeric conversion
+          y: parseFloat(item[yAxis])  // Ensure numeric conversion
+        })).filter(point => !isNaN(point.x) && !isNaN(point.y)); // Filter out points with NaN values
 
-      // Calculate y-axis values
-      const yValues = xValues.map(xValue => {
-        const filteredData = file.data.filter(item => item[xAxis] === xValue);
-        const sum = filteredData.reduce((acc, item) => {
-          const value = parseFloat(item[yAxis]);
-          return acc + (isNaN(value) ? 0 : value);
-        }, 0);
-        return sum;
-      });
+        if (points.length === 0) {
+          console.log('No valid data points found for scatter plot');
+          return res.status(400).json({ message: 'No valid data points found for scatter plot after filtering non-numeric values.' });
+        }
+        chartData.data = { points }; // Store as an array of points
+      } else {
+        // Existing aggregation logic for other chart types (bar, line, pie, area, bar3d, scatter3d)
+        const xValues = [...new Set(file.data.map(item => item[xAxis]))].filter(val => val !== null && val !== undefined && val !== '');
+        
+        if (xValues.length === 0) {
+          console.log('No valid data found for x-axis');
+          return res.status(400).json({ message: 'No valid data found for x-axis' });
+        }
 
-      // For 3D charts, process z-axis data
-      if (zAxis) {
-        const zValues = xValues.map(xValue => {
+        const yValues = xValues.map(xValue => {
           const filteredData = file.data.filter(item => item[xAxis] === xValue);
           const sum = filteredData.reduce((acc, item) => {
-            const value = parseFloat(item[zAxis]);
+            const value = parseFloat(item[yAxis]);
             return acc + (isNaN(value) ? 0 : value);
           }, 0);
           return sum;
         });
-        chartData.data = { x: xValues, y: yValues, z: zValues };
-      } else {
-        chartData.data = { x: xValues, y: yValues };
-      }
 
-      // Validate processed data
-      if (chartData.data.x.length === 0 || chartData.data.y.length === 0) {
-        console.log('Failed to process chart data');
-        return res.status(400).json({ message: 'Failed to process chart data' });
+        if (type === 'bar3d' || type === 'scatter3d') { // scatter3d might need raw points too, but let's adjust one by one
+          if (!zAxis) {
+            console.log('Missing zAxis for 3D chart type:', type);
+            return res.status(400).json({ message: `zAxis is required for ${type} chart.` });
+          }
+          if (!file.headers.includes(zAxis)) {
+             console.log('Invalid zAxis selection for 3D chart');
+             return res.status(400).json({ message: 'Invalid zAxis selection for 3D chart' });
+          }
+          const zValues = xValues.map(xValue => {
+            const filteredData = file.data.filter(item => item[xAxis] === xValue);
+            const sum = filteredData.reduce((acc, item) => {
+              const value = parseFloat(item[zAxis]);
+              return acc + (isNaN(value) ? 0 : value);
+            }, 0);
+            return sum;
+          });
+          chartData.data = { x: xValues, y: yValues, z: zValues };
+        } else {
+          chartData.data = { x: xValues, y: yValues };
+        }
+
+        if (chartData.data.x.length === 0 || chartData.data.y.length === 0) {
+          console.log('Failed to process chart data with aggregation');
+          return res.status(400).json({ message: 'Failed to process chart data with aggregation' });
+        }
       }
 
       // Add the processed chart to the file
@@ -301,7 +320,7 @@ router.post('/files/:fileId/charts', auth, async (req, res) => {
 });
 
 // Update a chart
-router.put('/:fileId/charts/:chartId', auth, async (req, res) => {
+router.put('/files/:fileId/charts/:chartId', auth, async (req, res) => {
   try {
     const file = await File.findById(req.params.fileId);
     if (!file) {
@@ -339,7 +358,7 @@ router.put('/:fileId/charts/:chartId', auth, async (req, res) => {
 });
 
 // Delete a chart
-router.delete('/:fileId/charts/:chartId', auth, async (req, res) => {
+router.delete('/files/:fileId/charts/:chartId', auth, async (req, res) => {
   try {
     const file = await File.findById(req.params.fileId);
     if (!file) {

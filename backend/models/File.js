@@ -29,7 +29,7 @@ const fileSchema = new mongoose.Schema({
   charts: [{
     type: {
       type: String,
-      enum: ['bar', 'line', 'pie', 'bar3d', 'scatter3d'],
+      enum: ['bar', 'line', 'pie', 'bar3d', 'scatter3d', 'scatter', 'area'], // Ensuring 'scatter' and 'area' are definitely here
       required: true
     },
     xAxis: {

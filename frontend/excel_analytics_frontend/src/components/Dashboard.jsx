@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // Added useRef
 import { useNavigate } from 'react-router-dom';
 import { toast, Toaster } from 'react-hot-toast';
 import { Button } from './ui/button';
@@ -11,6 +11,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogClose,
+} from './ui/dialog'; // Import Dialog components
 import authService from '../services/authService';
 import {
   getCharts,
@@ -23,6 +33,10 @@ import BarChart from './charts/BarChart';
 import LineChart from './charts/LineChart';
 import PieChart from './charts/PieChart';
 import ChartConfig from './charts/ChartConfig';
+import Bar3DChart from './charts/Bar3DChart'; // Import Bar3DChart
+import Scatter3DChart from './charts/Scatter3DChart'; // Import Scatter3DChart
+import ScatterChart from './charts/ScatterChart'; // Import ScatterChart
+import AreaChart from './charts/AreaChart'; // Import AreaChart
 
 
 function Dashboard() {
@@ -35,6 +49,7 @@ function Dashboard() {
   const [charts, setCharts] = useState([]);
   const [showChartDialog, setShowChartDialog] = useState(false);
   const [editingChart, setEditingChart] = useState(null);
+  const chartRefs = useRef({}); // To store refs to chart instances
 
   useEffect(() => {
     const currentUser = authService.getCurrentUser();
@@ -75,10 +90,12 @@ function Dashboard() {
       if (!selectedFile?._id) {
         setCharts([]);
         setLoadingFileDetails(false);
+        chartRefs.current = {}; // Clear refs when no file is selected
         return;
       }
 
       setLoadingFileDetails(true);
+      chartRefs.current = {}; // Clear refs before loading new charts for the selected file
 
       // Phase 1: Ensure full file details (data and headers) are loaded
       if (!selectedFile.data || !selectedFile.headers || selectedFile.headers.length === 0) {
@@ -252,10 +269,66 @@ function Dashboard() {
     try {
       await deleteChart(selectedFile._id, chartId);
       setCharts(charts.filter(chart => chart._id !== chartId));
+      // Clean up ref for the deleted chart
+      if (chartRefs.current[chartId]) {
+        delete chartRefs.current[chartId];
+      }
       toast.success('Chart deleted successfully');
     } catch (error) {
       console.error('Error deleting chart:', error);
       toast.error('Failed to delete chart');
+    }
+  };
+
+  const handleDownloadChart = async (chartId, chartName) => {
+    const chartRefValue = chartRefs.current[chartId];
+    if (!chartRefValue) {
+      toast.error('Chart reference not found.');
+      return;
+    }
+
+    let canvasToDownload;
+
+    // Check if it's a Chart.js instance (2D charts)
+    if (chartRefValue.canvas) {
+      const originalCanvas = chartRefValue.canvas;
+      const newCanvas = document.createElement('canvas');
+      newCanvas.width = originalCanvas.width;
+      newCanvas.height = originalCanvas.height;
+      const ctx = newCanvas.getContext('2d');
+
+      // Fill background with white
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
+
+      // Draw the original chart onto the new canvas
+      ctx.drawImage(originalCanvas, 0, 0);
+      canvasToDownload = newCanvas;
+    } 
+    // Check if it's a react-three-fiber canvas (3D charts)
+    // The ref for R3F's <Canvas> component directly IS the canvas element
+    else if (chartRefValue.tagName === 'CANVAS' && chartRefValue.getContext('webgl')) { 
+      canvasToDownload = chartRefValue;
+      // The background color is set directly in the <Canvas> component for 3D charts
+      // using <color attach="background" args={['#ffffff']} />
+      // and gl={{ preserveDrawingBuffer: true }} is also set in the <Canvas>
+    } else {
+      toast.error('Unsupported chart type for download or chart not ready.');
+      return;
+    }
+
+    try {
+      const image = canvasToDownload.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = image;
+      link.download = `${chartName || 'chart'}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success('Chart downloaded successfully!');
+    } catch (error) {
+      console.error('Error downloading chart:', error);
+      toast.error('Failed to download chart. The chart might be too complex or from a different origin.');
     }
   };
 
@@ -394,9 +467,9 @@ function Dashboard() {
             </div>
           )}
           {!loadingFileDetails && selectedFile.data && selectedFile.headers && selectedFile.headers.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-6"> {/* Changed from grid to flex-col for vertical stacking */}
               <div>
-                <h3 className="font-semibold mb-2">Create New Chart</h3>
+                <h3 className="text-xl font-semibold mb-4 text-green-700 dark:text-green-400">Create New Chart</h3> {/* Styled title like Existing Charts */}
                 <Button
                   onClick={() => {
                     // Condition already checked by parent div, but good for safety
@@ -413,51 +486,40 @@ function Dashboard() {
                 >
                   Create New Chart
                 </Button>
-                {showChartDialog && ( // selectedFile.data and .headers are guaranteed by parent conditional
-                  <Card className="p-4">
-                    <ChartConfig
-                      key={editingChart ? editingChart._id : 'new-chart-form'}
-                      data={selectedFile.data}
-                      columns={selectedFile.headers} // Pass headers as columns
-                      config={editingChart || {
-                        type: 'bar',
-                        xAxis: selectedFile.headers[0], // Default to first header
-                        yAxis: selectedFile.headers.length > 1 ? selectedFile.headers[1] : selectedFile.headers[0], // Default to second or first
-                        name: '', 
-                      }}
-                      onCancel={() => {
-                        setShowChartDialog(false);
-                        setEditingChart(null);
-                      }}
-                      onConfigChange={(config) => {
-                        if (editingChart) {
-                          handleUpdateChart(editingChart._id, config);
-                        } else {
-                          handleAddChart(config);
-                        }
-                        setShowChartDialog(false);
-                        setEditingChart(null);
-                      }}
-                    />
-                  </Card>
-                )}
+                {/* Remove direct rendering of ChartConfig here */}
               </div>
               <div>
-                <h3 className="font-semibold mb-2">Existing Charts</h3>
-                <div className="grid gap-4">
+                <h3 className="text-xl font-semibold mb-4 text-green-700 dark:text-green-400">Existing Charts</h3>
+                {charts.length === 0 && !loadingFileDetails && (
+                  <p className="text-gray-500 dark:text-gray-400">No charts created for this file yet. Click "Create New Chart" to get started!</p>
+                )}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {charts.map((chart) => (
-                    <Card key={chart._id} className="p-4">
-                      <h4>{chart.name}</h4>
-                      {/* Ensure selectedFile.data is passed to charts if they need it */}
-                      {chart.type === 'bar' && selectedFile.data && (
-                        <BarChart data={selectedFile.data} config={chart} />
-                      )}
-                      {chart.type === 'line' && selectedFile.data && (
-                        <LineChart data={selectedFile.data} config={chart} />
-                      )}
-                      {chart.type === 'pie' && selectedFile.data && (
-                        <PieChart data={selectedFile.data} config={chart} />
-                      )}
+                    <Card key={chart._id} className="p-4 shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out dark:bg-gray-800">
+                      <h4 className="text-lg font-semibold mb-3 text-green-600 dark:text-green-300 truncate" title={chart.name}>{chart.name}</h4>
+                      <div className="chart-container h-64 w-full mb-3"> {/* Added a container with fixed height */}
+                        {chart.type === 'bar' && selectedFile.data && (
+                          <BarChart ref={el => chartRefs.current[chart._id] = el} data={selectedFile.data} config={chart} />
+                        )}
+                        {chart.type === 'line' && selectedFile.data && (
+                          <LineChart ref={el => chartRefs.current[chart._id] = el} data={selectedFile.data} config={chart} />
+                        )}
+                        {chart.type === 'pie' && selectedFile.data && (
+                          <PieChart ref={el => chartRefs.current[chart._id] = el} data={selectedFile.data} config={chart} />
+                        )}
+                        {chart.type === 'bar3d' && selectedFile.data && (
+                          <Bar3DChart ref={el => chartRefs.current[chart._id] = el} data={selectedFile.data} config={chart} />
+                        )}
+                        {chart.type === 'scatter3d' && selectedFile.data && (
+                          <Scatter3DChart ref={el => chartRefs.current[chart._id] = el} data={selectedFile.data} config={chart} />
+                        )}
+                        {chart.type === 'scatter' && selectedFile.data && (
+                          <ScatterChart ref={el => chartRefs.current[chart._id] = el} data={selectedFile.data} config={chart} />
+                        )}
+                        {chart.type === 'area' && selectedFile.data && (
+                          <AreaChart ref={el => chartRefs.current[chart._id] = el} data={selectedFile.data} config={chart} />
+                        )}
+                      </div>
                       <div className="flex justify-end gap-2 mt-2">
                         <Button
                           variant="outline"
@@ -469,6 +531,14 @@ function Dashboard() {
                           className="text-green-600 hover:text-green-700"
                         >
                           Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDownloadChart(chart._id, chart.name)}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          Download
                         </Button>
                         <Button
                           variant="outline"
@@ -492,6 +562,50 @@ function Dashboard() {
             </div>
           )}
         </Card>
+      )}
+
+      {/* Dialog for Chart Configuration */}
+      {selectedFile && selectedFile.data && selectedFile.headers && selectedFile.headers.length > 0 && (
+        <Dialog open={showChartDialog} onOpenChange={(isOpen) => {
+          setShowChartDialog(isOpen);
+          if (!isOpen) {
+            setEditingChart(null); // Reset editingChart when dialog closes
+          }
+        }}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>{editingChart ? 'Edit Chart' : 'Create New Chart'}</DialogTitle>
+              <DialogDescription>
+                {editingChart ? 'Modify the configuration of your chart.' : 'Configure your new chart based on the selected file data.'}
+              </DialogDescription>
+            </DialogHeader>
+            <ChartConfig
+              key={editingChart ? editingChart._id : 'new-chart-form'}
+              data={selectedFile.data}
+              columns={selectedFile.headers}
+              config={editingChart || {
+                type: 'bar',
+                xAxis: selectedFile.headers[0],
+                yAxis: selectedFile.headers.length > 1 ? selectedFile.headers[1] : selectedFile.headers[0],
+                name: '',
+              }}
+              onCancel={() => {
+                setShowChartDialog(false);
+                setEditingChart(null);
+              }}
+              onConfigChange={(config) => {
+                if (editingChart) {
+                  handleUpdateChart(editingChart._id, config);
+                } else {
+                  handleAddChart(config);
+                }
+                setShowChartDialog(false);
+                setEditingChart(null);
+              }}
+            />
+            {/* DialogFooter and DialogClose can be added here if ChartConfig doesn't handle its own close/submit actions effectively within the dialog */}
+          </DialogContent>
+        </Dialog>
       )}
     </div>
     </div>

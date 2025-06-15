@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react'; // Import forwardRef
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -21,7 +21,7 @@ ChartJS.register(
   Legend
 );
 
-const LineChart = ({ data, config }) => {
+const LineChart = forwardRef(({ data, config }, ref) => { // Use forwardRef
   const chartData = {
     labels: data.map(item => item[config.xAxis]),
     datasets: [
@@ -37,6 +37,15 @@ const LineChart = ({ data, config }) => {
 
   const options = {
     responsive: true,
+    maintainAspectRatio: false, // Allow chart to fill container better
+    layout: { // Add padding around the chart
+      padding: {
+        top: 20,
+        right: 20,
+        bottom: 20,
+        left: 20
+      }
+    },
     plugins: {
       legend: {
         position: 'top',
@@ -48,7 +57,7 @@ const LineChart = ({ data, config }) => {
     },
   };
 
-  return <Line data={chartData} options={options} />;
-};
+  return <Line ref={ref} data={chartData} options={options} />; // Pass ref
+});
 
 export default LineChart;

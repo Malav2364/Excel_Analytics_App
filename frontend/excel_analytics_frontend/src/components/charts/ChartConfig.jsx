@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Listbox } from '@headlessui/react';
 import { toast } from 'react-toastify';
 
-const chartTypes = ['bar', 'line', 'pie', 'bar3d', 'scatter3d'];
+const chartTypes = ['bar', 'line', 'pie', 'bar3d', 'scatter3d', 'scatter', 'area']; // Added 'scatter' and 'area'
 
 const ChartConfig = ({ data, config: initialConfig, onConfigChange, onCancel }) => {
   const [currentConfig, setCurrentConfig] = useState(() => {
@@ -108,11 +108,33 @@ const ChartConfig = ({ data, config: initialConfig, onConfigChange, onCancel }) 
   };
 
   const handleSave = () => {
-    if (currentConfig.xAxis && currentConfig.yAxis && columns.includes(currentConfig.xAxis) && columns.includes(currentConfig.yAxis)) {
-        onConfigChange(currentConfig);
+    const { type, xAxis, yAxis, zAxis } = currentConfig;
+    let configToSave = { ...currentConfig };
+
+    // Ensure a name exists, generate if empty
+    if (!configToSave.name || configToSave.name.trim() === '') {
+      configToSave.name = `${type} chart of ${yAxis || 'N/A'} by ${xAxis || 'N/A'}`;
+    }
+
+    if (xAxis && yAxis && columns.includes(xAxis) && columns.includes(yAxis)) {
+      if (type === 'scatter3d' || type === 'bar3d') { // Grouped 3D types that require zAxis
+        if (zAxis && columns.includes(zAxis)) {
+          onConfigChange(configToSave);
+        } else {
+          toast.error(`Please select a valid Z axis for the ${type} chart.`);
+          console.error(`Save attempt with invalid/missing Z axis for ${type}:`, configToSave, "Available columns:", columns);
+          return; // Prevent calling onConfigChange
+        }
+      } else { // For other 2D chart types
+        // Ensure zAxis is not sent if not applicable to avoid backend validation issues
+        if (configToSave.zAxis && !['bar3d', 'scatter3d'].includes(type)) {
+            delete configToSave.zAxis;
+        }
+        onConfigChange(configToSave);
+      }
     } else {
-        toast.error("Please select valid X and Y axes from the available data columns.");
-        console.error("Save attempt with invalid/missing axes:", currentConfig, "Available columns:", columns);
+      toast.error("Please select valid X and Y axes from the available data columns.");
+      console.error("Save attempt with invalid/missing axes:", configToSave, "Available columns:", columns);
     }
   };
   
@@ -219,10 +241,10 @@ const ChartConfig = ({ data, config: initialConfig, onConfigChange, onCancel }) 
           </Listbox>
         </div>
 
-        {/* Z Axis selector for 3D scatter charts */}
-        {currentConfig.type === 'scatter3d' && (
+        {/* Z Axis selector for 3D charts that require it (e.g., scatter3d) */}
+        {(currentConfig.type === 'scatter3d' || currentConfig.type === 'bar3d') && ( // Show Z-axis for bar3d as well, though it might be optional or used differently
           <div>
-            <label className="block text-sm font-medium text-muted-foreground">Z Axis</label>
+            <label className="block text-sm font-medium text-muted-foreground">Z Axis (Optional for Bar3D)</label>
             <Listbox value={currentConfig.zAxis || ''} onChange={(value) => handleChange('zAxis', value)} disabled={columns.length === 0}>
               <div className="relative mt-1">
                 <Listbox.Button className="relative w-full py-2 pl-3 pr-10 text-left bg-background border border-input rounded-md shadow-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm disabled:opacity-50">
@@ -260,7 +282,14 @@ const ChartConfig = ({ data, config: initialConfig, onConfigChange, onCancel }) 
         <button
           type="button"
           onClick={handleSave}
-          disabled={!currentConfig.xAxis || !currentConfig.yAxis || columns.length === 0 || !columns.includes(currentConfig.xAxis) || !columns.includes(currentConfig.yAxis)}
+          disabled={
+            !currentConfig.xAxis || 
+            !currentConfig.yAxis || 
+            columns.length === 0 || 
+            !columns.includes(currentConfig.xAxis) || 
+            !columns.includes(currentConfig.yAxis) ||
+            (currentConfig.type === 'scatter3d' && (!currentConfig.zAxis || !columns.includes(currentConfig.zAxis)))
+          }
           className="px-4 py-2 text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50"
         >
           {isNewChart ? 'Create Chart' : 'Save Changes'}
