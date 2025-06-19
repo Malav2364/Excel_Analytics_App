@@ -43,12 +43,12 @@ function Dashboard() {
   const navigate = useNavigate();
   const [files, setFiles] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [loading, setLoading] = useState(false); // For file upload
   const [loadingFileDetails, setLoadingFileDetails] = useState(false); // For loading selected file's full data
   const [user, setUser] = useState(null);
   const [charts, setCharts] = useState([]);
   const [showChartDialog, setShowChartDialog] = useState(false);
   const [editingChart, setEditingChart] = useState(null);
+  const [loading, setLoading] = useState(false); // For file upload loading state
   const chartRefs = useRef({}); // To store refs to chart instances
 
   useEffect(() => {
@@ -130,102 +130,6 @@ function Dashboard() {
     effectLogic();
   }, [selectedFile]); // Dependency: re-run when selectedFile object reference changes.
 
-
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    // Check file size (5MB limit)
-    const maxSize = 5 * 1024 * 1024; // 5MB in bytes
-    if (file.size > maxSize) {
-      toast.error('File size exceeds 5MB limit. Please choose a smaller file.');
-      event.target.value = '';
-      return;
-    }
-
-    // Check file type
-    const isExcel = file.type === 'application/vnd.ms-excel' || 
-                    file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    
-    if (!isExcel) {
-      toast.error('Please select an Excel file (.xls or .xlsx)');
-      event.target.value = '';
-      return;
-    }
-
-    const uploadPromise = new Promise((resolve, reject) => {
-      const uploadFile = async () => {
-        try {
-          setLoading(true);
-          const formData = new FormData();
-        formData.append('file', file);
-        
-        const token = authService.getAccessToken();
-        console.log('Uploading file:', {
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          lastModified: new Date(file.lastModified).toISOString()
-        });
-
-        const response = await fetch('http://localhost:5000/api/excel/upload', {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          }
-        });
-        
-        const responseData = await response.json();
-        
-        if (!response.ok) {
-          console.error('Server error:', responseData);
-          throw new Error(responseData.message || responseData.details || 'Upload failed');
-        }
-        
-        console.log('Upload successful:', responseData);
-        
-        setFiles(prev => [...prev, responseData]);
-        setSelectedFile(responseData); // Set newly uploaded file as selected
-        resolve('File uploaded successfully! Ready for analysis.');
-        
-      } catch (error) {
-        console.error('Error uploading file:', {
-          error: error.message,
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size
-        });
-        
-        // Create user-friendly error message based on the error type
-        const errorMessage = error.message.toLowerCase();
-        let userMessage = 'An unexpected error occurred while uploading the file. Please try again.';
-        
-        if (errorMessage.includes('invalid excel file') || errorMessage.includes('failed to read excel file')) {
-          userMessage = 'The file appears to be corrupted or not a valid Excel file. Please check the file and try again.';
-        } else if (errorMessage.includes('empty') || errorMessage.includes('no data')) {
-          userMessage = 'The Excel file is empty. Please upload a file containing data.';
-        } else if (errorMessage.includes('password') || errorMessage.includes('protected')) {
-          userMessage = 'Unable to read the Excel file. Please make sure it\'s not password protected and try again.';
-        } else if (errorMessage.includes('file upload failed') || errorMessage.includes('file path')) {
-          userMessage = 'Failed to upload the file. Please try again. If the problem persists, the file might be corrupted.';
-        }
-        
-        reject(userMessage);
-      } finally {
-        setLoading(false);
-        event.target.value = ''; // Reset file input
-      }
-    };
-    uploadFile(); // Execute the async function
-    });
-
-    toast.promise(uploadPromise, {
-      loading: 'Uploading file...',
-      success: (message) => message,
-      error: (error) => error,
-    });
-  };
 
   const handleLogout = () => {
     authService.logout();
@@ -332,6 +236,50 @@ function Dashboard() {
     }
   };
 
+  // New handler for file upload
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Basic file type and size validation
+    if (!['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(file.type)) {
+      toast.error('Invalid file type. Please upload an Excel file (.xls, .xlsx).');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      toast.error('File size exceeds 5MB. Please upload a smaller file.');
+      return;
+    }
+
+    setLoading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      // Upload the file
+      const response = await fetch('http://localhost:5000/api/excel/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authService.getAccessToken()}`
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to upload file');
+      }
+
+      const data = await response.json();
+      setFiles([...files, data]); // Add the new file to the list
+      toast.success('File uploaded successfully!');
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      toast.error('Failed to upload file. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Toaster 
@@ -402,38 +350,33 @@ function Dashboard() {
       </nav>
 
       <div className="container mx-auto p-4">
-        {/* File Upload Section */}
-        <Card className="mb-6 p-4">
-          <h2 className="text-2xl font-bold mb-4 text-green-700 dark:text-green-400">
-            Upload Excel File
-          </h2>
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-4">
-              <input
-                type="file"
-                accept=".xls,.xlsx"
-                onChange={handleFileUpload}
-                className="block w-full text-sm text-slate-500
-                  file:mr-4 file:py-2 file:px-4
-                  file:rounded-full file:border-0
-                  file:text-sm file:font-semibold
-                  file:bg-green-50 file:text-green-700
-                  hover:file:bg-green-100
-                  dark:file:bg-green-900 dark:file:text-green-400
-                  dark:hover:file:bg-green-800"
-                id="file-upload"
-              />
-            </div>
-            {loading && (
-              <div className="flex items-center gap-2">
-                <div className="animate-spin h-5 w-5 border-2 border-green-500 rounded-full border-t-transparent"></div>
-                <span className="text-green-600 dark:text-green-400">Uploading your file...</span>
-              </div>
-            )}
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              <p>Supported formats: .xls, .xlsx</p>
-              <p>Maximum file size: 5MB</p>
-            </div>
+        {/* File Upload Section - improved styling and convenience */}
+        <Card className="mb-6 p-6 flex flex-col md:flex-row items-center justify-between bg-gradient-to-r from-green-50 to-green-100 dark:from-black dark:to-neutral-900 border-2 border-green-200 dark:border-green-800 shadow-lg">
+          <div className="flex-1 mb-4 md:mb-0">
+            <h2 className="text-2xl font-bold mb-2 text-green-700 dark:text-green-400">
+              Upload Excel File
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-2">
+              Upload your Excel file to get started with analytics and charting.<br />
+              <span className="font-semibold">Supported formats:</span> <b>.xls, .xlsx</b> &nbsp;|&nbsp; <span className="font-semibold">Max size:</span> 5MB
+            </p>
+          </div>
+          <div className="flex flex-col items-center gap-2 w-full md:w-auto">
+            <input
+              type="file"
+              accept=".xls,.xlsx"
+              onChange={handleFileUpload}
+              className="hidden"
+              id="file-upload"
+              ref={input => this && (this.fileInput = input)}
+            />
+            <Button
+              className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white px-8 py-3 text-lg font-semibold shadow-md cursor-pointer"
+              disabled={loading}
+              onClick={() => document.getElementById('file-upload').click()}
+            >
+              {loading ? 'Uploading...' : 'Select File'}
+            </Button>
           </div>
         </Card>
 
