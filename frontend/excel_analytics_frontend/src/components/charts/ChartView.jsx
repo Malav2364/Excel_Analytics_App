@@ -4,8 +4,7 @@ import BarChart from './BarChart';
 import LineChart from './LineChart';
 import PieChart from './PieChart';
 import ChartConfig from './ChartConfig';
-import Bar3DChart from './Bar3DChart';
-import Scatter3DChart from './Scatter3DChart';
+import HistogramChart from './HistogramChart';
 
 const ChartView = ({ data, initialConfig, onSave }) => {
   const [config, setConfig] = React.useState(initialConfig || {
@@ -26,10 +25,8 @@ const ChartView = ({ data, initialConfig, onSave }) => {
         return <LineChart data={data} config={config} />;
       case 'pie':
         return <PieChart data={data} config={config} />;
-      case 'bar3d':
-        return <Bar3DChart data={data} config={config} />;
-      case 'scatter3d':
-        return <Scatter3DChart data={data} config={config} />;
+      case 'histogram':
+        return <HistogramChart data={data} config={config} />;
       default:
         return null;
     }

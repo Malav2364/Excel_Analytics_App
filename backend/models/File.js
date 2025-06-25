@@ -29,7 +29,7 @@ const fileSchema = new mongoose.Schema({
   charts: [{
     type: {
       type: String,
-      enum: ['bar', 'line', 'pie', 'bar3d', 'scatter3d', 'scatter', 'area'], // Ensuring 'scatter' and 'area' are definitely here
+      enum: ['bar', 'line', 'pie', 'scatter', 'area', 'histogram'], // Removed 3D, added histogram
       required: true
     },
     xAxis: {
@@ -38,7 +38,9 @@ const fileSchema = new mongoose.Schema({
     },
     yAxis: {
       type: String,
-      required: true
+      required: function() {
+        return this.type !== 'histogram';
+      }
     },
     zAxis: {
       type: String,

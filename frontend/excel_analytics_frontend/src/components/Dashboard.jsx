@@ -33,10 +33,9 @@ import BarChart from './charts/BarChart';
 import LineChart from './charts/LineChart';
 import PieChart from './charts/PieChart';
 import ChartConfig from './charts/ChartConfig';
-import Bar3DChart from './charts/Bar3DChart'; // Import Bar3DChart
-import Scatter3DChart from './charts/Scatter3DChart'; // Import Scatter3DChart
 import ScatterChart from './charts/ScatterChart'; // Import ScatterChart
 import AreaChart from './charts/AreaChart'; // Import AreaChart
+import HistogramChart from './charts/HistogramChart';
 
 
 function Dashboard() {
@@ -138,11 +137,26 @@ function Dashboard() {
 
   const handleAddChart = async (config) => {
     try {
-      const newChart = await addChart(selectedFile._id, {
-        ...config,
-        // Ensure name is generated safely, even if xAxis or yAxis are somehow empty
-        name: `${config.type} chart of ${config.yAxis || 'N/A'} by ${config.xAxis || 'N/A'}`
-      });
+      let chartPayload;
+
+      if (config.type === 'histogram') {
+        // For histogram, we only need xAxis. The y-axis is frequency.
+        chartPayload = {
+          name: `Histogram of ${config.xAxis}`,
+          type: 'histogram',
+          xAxis: config.xAxis,
+        };
+      } else {
+        // For other chart types, we need both xAxis and yAxis.
+        chartPayload = {
+          name: `${config.type} chart of ${config.yAxis} by ${config.xAxis}`,
+          type: config.type,
+          xAxis: config.xAxis,
+          yAxis: config.yAxis,
+        };
+      }
+
+      const newChart = await addChart(selectedFile._id, chartPayload);
       setCharts([...charts, newChart]);
       toast.success('Chart added successfully');
       setShowChartDialog(false);
@@ -154,11 +168,26 @@ function Dashboard() {
 
   const handleUpdateChart = async (chartId, config) => {
     try {
-      const updatedChart = await updateChart(selectedFile._id, chartId, {
-        ...config,
-        // Ensure name is generated safely
-        name: `${config.type} chart of ${config.yAxis || 'N/A'} by ${config.xAxis || 'N/A'}`
-      });
+      let chartPayload;
+
+      if (config.type === 'histogram') {
+        // For histogram, we only need xAxis. The y-axis is frequency.
+        chartPayload = {
+          name: `Histogram of ${config.xAxis}`,
+          type: 'histogram',
+          xAxis: config.xAxis,
+        };
+      } else {
+        // For other chart types, we need both xAxis and yAxis.
+        chartPayload = {
+          name: `${config.type} chart of ${config.yAxis} by ${config.xAxis}`,
+          type: config.type,
+          xAxis: config.xAxis,
+          yAxis: config.yAxis,
+        };
+      }
+
+      const updatedChart = await updateChart(selectedFile._id, chartId, chartPayload);
       setCharts(charts.map(chart => 
         chart._id === chartId ? updatedChart : chart
       ));
@@ -277,6 +306,32 @@ function Dashboard() {
       toast.error('Failed to upload file. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const renderChartComponent = (chart) => {
+    const chartRef = el => (chartRefs.current[chart._id] = el);
+    const chartProps = {
+      ref: chartRef,
+      data: selectedFile.data,
+      config: chart,
+    };
+
+    switch (chart.type) {
+      case 'bar':
+        return <BarChart {...chartProps} />;
+      case 'line':
+        return <LineChart {...chartProps} />;
+      case 'pie':
+        return <PieChart {...chartProps} />;
+      case 'scatter':
+        return <ScatterChart {...chartProps} />;
+      case 'area':
+        return <AreaChart {...chartProps} />;
+      case 'histogram':
+        return <HistogramChart {...chartProps} />;
+      default:
+        return <p>Unsupported chart type: {chart.type}</p>;
     }
   };
 
@@ -441,27 +496,7 @@ function Dashboard() {
                     <Card key={chart._id} className="p-4 shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out dark:bg-gray-800">
                       <h4 className="text-lg font-semibold mb-3 text-green-600 dark:text-green-300 truncate" title={chart.name}>{chart.name}</h4>
                       <div className="chart-container h-64 w-full mb-3"> {/* Added a container with fixed height */}
-                        {chart.type === 'bar' && selectedFile.data && (
-                          <BarChart ref={el => chartRefs.current[chart._id] = el} data={selectedFile.data} config={chart} />
-                        )}
-                        {chart.type === 'line' && selectedFile.data && (
-                          <LineChart ref={el => chartRefs.current[chart._id] = el} data={selectedFile.data} config={chart} />
-                        )}
-                        {chart.type === 'pie' && selectedFile.data && (
-                          <PieChart ref={el => chartRefs.current[chart._id] = el} data={selectedFile.data} config={chart} />
-                        )}
-                        {chart.type === 'bar3d' && selectedFile.data && (
-                          <Bar3DChart ref={el => chartRefs.current[chart._id] = el} data={selectedFile.data} config={chart} />
-                        )}
-                        {chart.type === 'scatter3d' && selectedFile.data && (
-                          <Scatter3DChart ref={el => chartRefs.current[chart._id] = el} data={selectedFile.data} config={chart} />
-                        )}
-                        {chart.type === 'scatter' && selectedFile.data && (
-                          <ScatterChart ref={el => chartRefs.current[chart._id] = el} data={selectedFile.data} config={chart} />
-                        )}
-                        {chart.type === 'area' && selectedFile.data && (
-                          <AreaChart ref={el => chartRefs.current[chart._id] = el} data={selectedFile.data} config={chart} />
-                        )}
+                        {renderChartComponent(chart)}
                       </div>
                       <div className="flex justify-end gap-2 mt-2">
                         <Button

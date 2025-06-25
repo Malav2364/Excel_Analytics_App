@@ -215,16 +215,21 @@ router.post('/files/:fileId/charts', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const { type, xAxis, yAxis, zAxis, name } = req.body;
+    const { type, xAxis, yAxis, name } = req.body;
 
     // Validate chart configuration
-    if (!type || !xAxis || !yAxis || !name) {
+    if (!type || !xAxis || !name) {
       console.log('Missing required chart configuration');
       return res.status(400).json({ message: 'Missing required chart configuration' });
     }
+    // For histograms, yAxis is not required from the user
+    if (type !== 'histogram' && !yAxis) {
+        return res.status(400).json({ message: 'yAxis is required for this chart type' });
+    }
+
 
     // Validate that the axes exist in the data
-    if (!file.headers.includes(xAxis) || !file.headers.includes(yAxis) || (zAxis && !file.headers.includes(zAxis))) {
+    if (!file.headers.includes(xAxis) || (yAxis && !file.headers.includes(yAxis))) {
       console.log('Invalid axis selection');
       return res.status(400).json({ message: 'Invalid axis selection' });
     }
@@ -233,19 +238,23 @@ router.post('/files/:fileId/charts', auth, async (req, res) => {
     const chartData = {
       type,
       xAxis,
-      yAxis,
       name,
       data: {}
     };
 
-    // Add zAxis if present
-    if (zAxis) {
-      chartData.zAxis = zAxis;
+    if (yAxis) {
+        chartData.yAxis = yAxis;
     }
 
     // Process the data based on chart type
     try {
-      if (type === 'scatter') {
+      if (type === 'histogram') {
+        const values = file.data.map(item => parseFloat(item[xAxis])).filter(val => !isNaN(val));
+        if (values.length === 0) {
+            return res.status(400).json({ message: 'No valid data for histogram' });
+        }
+        chartData.data = { values };
+      } else if (type === 'scatter') {
         // For scatter plots, we want individual data points
         const points = file.data.map(item => ({
           x: parseFloat(item[xAxis]), // Ensure numeric conversion
@@ -258,7 +267,7 @@ router.post('/files/:fileId/charts', auth, async (req, res) => {
         }
         chartData.data = { points }; // Store as an array of points
       } else {
-        // Existing aggregation logic for other chart types (bar, line, pie, area, bar3d, scatter3d)
+        // Existing aggregation logic for other chart types (bar, line, pie, area)
         const xValues = [...new Set(file.data.map(item => item[xAxis]))].filter(val => val !== null && val !== undefined && val !== '');
         
         if (xValues.length === 0) {
@@ -274,28 +283,8 @@ router.post('/files/:fileId/charts', auth, async (req, res) => {
           }, 0);
           return sum;
         });
+        chartData.data = { x: xValues, y: yValues };
 
-        if (type === 'bar3d' || type === 'scatter3d') { // scatter3d might need raw points too, but let's adjust one by one
-          if (!zAxis) {
-            console.log('Missing zAxis for 3D chart type:', type);
-            return res.status(400).json({ message: `zAxis is required for ${type} chart.` });
-          }
-          if (!file.headers.includes(zAxis)) {
-             console.log('Invalid zAxis selection for 3D chart');
-             return res.status(400).json({ message: 'Invalid zAxis selection for 3D chart' });
-          }
-          const zValues = xValues.map(xValue => {
-            const filteredData = file.data.filter(item => item[xAxis] === xValue);
-            const sum = filteredData.reduce((acc, item) => {
-              const value = parseFloat(item[zAxis]);
-              return acc + (isNaN(value) ? 0 : value);
-            }, 0);
-            return sum;
-          });
-          chartData.data = { x: xValues, y: yValues, z: zValues };
-        } else {
-          chartData.data = { x: xValues, y: yValues };
-        }
 
         if (chartData.data.x.length === 0 || chartData.data.y.length === 0) {
           console.log('Failed to process chart data with aggregation');
@@ -315,6 +304,9 @@ router.post('/files/:fileId/charts', auth, async (req, res) => {
     }
   } catch (error) {
     console.error('Error adding chart:', error);
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ message: error.message, details: error.errors });
+    }
     res.status(500).json({ message: 'Error adding chart', error: error.message });
   }
 });
@@ -335,8 +327,11 @@ router.put('/files/:fileId/charts/:chartId', auth, async (req, res) => {
     const { type, xAxis, yAxis, name } = req.body;
 
     // Validate chart configuration
-    if (!type || !xAxis || !yAxis || !name) {
+    if (!type || !xAxis || !name) {
       return res.status(400).json({ message: 'Missing required chart configuration' });
+    }
+    if (type !== 'histogram' && !yAxis) {
+        return res.status(400).json({ message: 'yAxis is required for this chart type' });
     }
 
     // Find and update chart
@@ -345,14 +340,67 @@ router.put('/files/:fileId/charts/:chartId', auth, async (req, res) => {
       return res.status(404).json({ message: 'Chart not found' });
     }
 
-    chart.type = type;
-    chart.xAxis = xAxis;
-    chart.yAxis = yAxis;
-    chart.name = name;
+    // Process the data based on chart type
+    const chartData = {
+        data: {}
+    };
 
-    await file.save();
-    res.json(chart);
+    try {
+        if (type === 'histogram') {
+            const values = file.data.map(item => parseFloat(item[xAxis])).filter(val => !isNaN(val));
+            if (values.length === 0) {
+                return res.status(400).json({ message: 'No valid data for histogram' });
+            }
+            chartData.data = { values };
+        } else if (type === 'scatter') {
+            const points = file.data.map(item => ({
+                x: parseFloat(item[xAxis]),
+                y: parseFloat(item[yAxis])
+            })).filter(point => !isNaN(point.x) && !isNaN(point.y));
+
+            if (points.length === 0) {
+                return res.status(400).json({ message: 'No valid data points found for scatter plot.' });
+            }
+            chartData.data = { points };
+        } else {
+            const xValues = [...new Set(file.data.map(item => item[xAxis]))].filter(val => val !== null && val !== undefined && val !== '');
+            if (xValues.length === 0) {
+                return res.status(400).json({ message: 'No valid data found for x-axis' });
+            }
+            const yValues = xValues.map(xValue => {
+                const filteredData = file.data.filter(item => item[xAxis] === xValue);
+                const sum = filteredData.reduce((acc, item) => {
+                    const value = parseFloat(item[yAxis]);
+                    return acc + (isNaN(value) ? 0 : value);
+                }, 0);
+                return sum;
+            });
+            chartData.data = { x: xValues, y: yValues };
+        }
+
+        // Update chart properties
+        chart.type = type;
+        chart.name = name;
+        chart.xAxis = xAxis;
+        if (type !== 'histogram') {
+            chart.yAxis = yAxis;
+        } else {
+            chart.yAxis = undefined;
+        }
+        chart.data = chartData.data;
+
+        await file.save();
+        res.json(chart);
+
+    } catch (error) {
+        console.error('Error processing chart data during update:', error);
+        res.status(500).json({ message: 'Error processing chart data', error: error.message });
+    }
   } catch (error) {
+    console.error('Error updating chart:', error);
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ message: error.message, details: error.errors });
+    }
     res.status(500).json({ message: 'Error updating chart', error: error.message });
   }
 });

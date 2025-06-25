@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Listbox } from '@headlessui/react';
 import { toast } from 'react-toastify';
 
-const chartTypes = ['bar', 'line', 'pie', 'bar3d', 'scatter3d', 'scatter', 'area']; // Added 'scatter' and 'area'
+const chartTypes = ['bar', 'line', 'pie', 'scatter', 'area', 'histogram'];
 
 const ChartConfig = ({ data, config: initialConfig, onConfigChange, onCancel }) => {
   const [currentConfig, setCurrentConfig] = useState(() => {
@@ -43,6 +43,20 @@ const ChartConfig = ({ data, config: initialConfig, onConfigChange, onCancel }) 
       ? Object.keys(data[0])
       : [];
   }, [data]);
+
+  const numericColumns = useMemo(() => {
+    if (!data || data.length === 0 || columns.length === 0) {
+      return [];
+    }
+    // A column is considered numeric if all its non-empty/null values in a sample are numbers.
+    const sample = data.slice(0, 10); // Check up to 10 rows
+    return columns.filter(col =>
+      sample.every(row => {
+        const value = row[col];
+        return value === '' || value === null || value === undefined || !isNaN(parseFloat(value));
+      })
+    );
+  }, [data, columns]);
 
   // Effect to set default axes based on columns or ensure they are valid when columns or initialConfig changes
   useEffect(() => {
@@ -108,37 +122,48 @@ const ChartConfig = ({ data, config: initialConfig, onConfigChange, onCancel }) 
   };
 
   const handleSave = () => {
-    const { type, xAxis, yAxis, zAxis } = currentConfig;
+    const { type, xAxis, yAxis } = currentConfig;
     let configToSave = { ...currentConfig };
 
     // Ensure a name exists, generate if empty
     if (!configToSave.name || configToSave.name.trim() === '') {
-      configToSave.name = `${type} chart of ${yAxis || 'N/A'} by ${xAxis || 'N/A'}`;
+      if (type === 'histogram') {
+        configToSave.name = `Histogram of ${xAxis}` + (yAxis ? ` by ${yAxis}` : '');
+      } else {
+        configToSave.name = `${type} chart of ${yAxis || 'N/A'} by ${xAxis || 'N/A'}`;
+      }
     }
 
-    if (xAxis && yAxis && columns.includes(xAxis) && columns.includes(yAxis)) {
-      if (type === 'scatter3d' || type === 'bar3d') { // Grouped 3D types that require zAxis
-        if (zAxis && columns.includes(zAxis)) {
-          onConfigChange(configToSave);
-        } else {
-          toast.error(`Please select a valid Z axis for the ${type} chart.`);
-          console.error(`Save attempt with invalid/missing Z axis for ${type}:`, configToSave, "Available columns:", columns);
-          return; // Prevent calling onConfigChange
-        }
-      } else { // For other 2D chart types
-        // Ensure zAxis is not sent if not applicable to avoid backend validation issues
-        if (configToSave.zAxis && !['bar3d', 'scatter3d'].includes(type)) {
-            delete configToSave.zAxis;
-        }
-        onConfigChange(configToSave);
-      }
-    } else {
-      toast.error("Please select valid X and Y axes from the available data columns.");
-      console.error("Save attempt with invalid/missing axes:", configToSave, "Available columns:", columns);
+    // Validation
+    if (!xAxis || !columns.includes(xAxis)) {
+      toast.error("Please select a valid X axis.");
+      return;
     }
+
+    if (type === 'histogram' && !numericColumns.includes(xAxis)) {
+      toast.error("Histogram requires a numeric column for the X axis.");
+      return;
+    }
+
+    if (type === 'histogram' && yAxis && !numericColumns.includes(yAxis)) {
+      toast.error("For a 2-parameter histogram, the Y axis must also be a numeric column.");
+      return;
+    }
+
+    if (type !== 'histogram' && (!yAxis || !columns.includes(yAxis))) {
+      toast.error("Please select a valid Y axis.");
+      return;
+    }
+
+    // Clean up payload for histogram if yAxis is not selected
+    if (type === 'histogram' && !yAxis) {
+      delete configToSave.yAxis; // Ensure yAxis is not sent for a 1-parameter histogram
+    }
+
+    onConfigChange(configToSave);
   };
-  
-  const isNewChart = !(initialConfig && initialConfig._id); 
+
+  const isNewChart = !(initialConfig && initialConfig._id);
 
   return (
     <div className="p-4 bg-card rounded-lg shadow">
@@ -191,6 +216,9 @@ const ChartConfig = ({ data, config: initialConfig, onConfigChange, onCancel }) 
 
         <div>
           <label className="block text-sm font-medium text-muted-foreground">X Axis</label>
+          {currentConfig.type === 'histogram' && numericColumns.length === 0 && (
+            <p className="text-sm text-red-500 mt-1">No numeric columns found. Please select another chart type.</p>
+          )}
           <Listbox value={currentConfig.xAxis || ''} onChange={(value) => handleChange('xAxis', value)} disabled={columns.length === 0}>
              <div className="relative mt-1">
               <Listbox.Button className="relative w-full py-2 pl-3 pr-10 text-left bg-background border border-input rounded-md shadow-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm disabled:opacity-50">
@@ -200,7 +228,7 @@ const ChartConfig = ({ data, config: initialConfig, onConfigChange, onCancel }) 
                 </span>
               </Listbox.Button>
               <Listbox.Options className="absolute z-10 w-full py-1 mt-1 overflow-auto text-base bg-background border border-input rounded-md shadow-lg max-h-60 ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
-                {columns.map((column) => (
+                {(currentConfig.type === 'histogram' ? numericColumns : columns).map((column) => (
                   <Listbox.Option key={column} value={column} className={({ active }) => `${active ? 'text-primary-foreground bg-primary' : 'text-foreground'} cursor-default select-none relative py-2 pl-10 pr-4`}>
                     {({ selected, active }) => (
                       <>
@@ -215,8 +243,11 @@ const ChartConfig = ({ data, config: initialConfig, onConfigChange, onCancel }) 
           </Listbox>
         </div>
 
+        {/* The Y-axis is now always visible, but optional for histograms */}
         <div>
-          <label className="block text-sm font-medium text-muted-foreground">Y Axis</label>
+          <label className="block text-sm font-medium text-muted-foreground">
+            Y Axis {currentConfig.type === 'histogram' && <span className="text-xs text-gray-500">(Optional)</span>}
+          </label>
           <Listbox value={currentConfig.yAxis || ''} onChange={(value) => handleChange('yAxis', value)} disabled={columns.length === 0}>
             <div className="relative mt-1">
               <Listbox.Button className="relative w-full py-2 pl-3 pr-10 text-left bg-background border border-input rounded-md shadow-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm disabled:opacity-50">
@@ -241,34 +272,7 @@ const ChartConfig = ({ data, config: initialConfig, onConfigChange, onCancel }) 
           </Listbox>
         </div>
 
-        {/* Z Axis selector for 3D charts that require it (e.g., scatter3d) */}
-        {(currentConfig.type === 'scatter3d' || currentConfig.type === 'bar3d') && ( // Show Z-axis for bar3d as well, though it might be optional or used differently
-          <div>
-            <label className="block text-sm font-medium text-muted-foreground">Z Axis (Optional for Bar3D)</label>
-            <Listbox value={currentConfig.zAxis || ''} onChange={(value) => handleChange('zAxis', value)} disabled={columns.length === 0}>
-              <div className="relative mt-1">
-                <Listbox.Button className="relative w-full py-2 pl-3 pr-10 text-left bg-background border border-input rounded-md shadow-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm disabled:opacity-50">
-                  <span className="block truncate">{currentConfig.zAxis || (columns.length === 0 ? 'No data columns' : 'Select Z axis')}</span>
-                  <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                    <svg className="w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L10 5.414 7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3zm-3.707 9.293a1 1 0 011.414 0L10 14.586l2.293-2.293a1 1 0 011.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-                  </span>
-                </Listbox.Button>
-                <Listbox.Options className="absolute z-10 w-full py-1 mt-1 overflow-auto text-base bg-background border border-input rounded-md shadow-lg max-h-60 ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
-                  {columns.map((column) => (
-                    <Listbox.Option key={column} value={column} className={({ active }) => `${active ? 'text-primary-foreground bg-primary' : 'text-foreground'} cursor-default select-none relative py-2 pl-10 pr-4`}>
-                      {({ selected, active }) => (
-                        <>
-                          <span className={`${selected ? 'font-medium' : 'font-normal'} block truncate`}>{column}</span>
-                          {selected ? (<span className={`${active ? 'text-primary-foreground' : 'text-primary'} absolute inset-y-0 left-0 flex items-center pl-3`}><svg className="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg></span>) : null}
-                        </>
-                      )}
-                    </Listbox.Option>
-                  ))}
-                </Listbox.Options>
-              </div>
-            </Listbox>
-          </div>
-        )}
+        {/* Removed the Z-axis selector for old 3D charts */}
       </div>
 
       <div className="flex justify-end gap-3 mt-6">
@@ -282,14 +286,27 @@ const ChartConfig = ({ data, config: initialConfig, onConfigChange, onCancel }) 
         <button
           type="button"
           onClick={handleSave}
-          disabled={
-            !currentConfig.xAxis || 
-            !currentConfig.yAxis || 
-            columns.length === 0 || 
-            !columns.includes(currentConfig.xAxis) || 
-            !columns.includes(currentConfig.yAxis) ||
-            (currentConfig.type === 'scatter3d' && (!currentConfig.zAxis || !columns.includes(currentConfig.zAxis)))
-          }
+          disabled={(() => {
+            const { type, xAxis, yAxis } = currentConfig;
+            if (columns.length === 0 || !xAxis || !columns.includes(xAxis)) {
+              return true;
+            }
+            if (type === 'histogram') {
+              if (!numericColumns.includes(xAxis)) {
+                return true;
+              }
+              // If yAxis is selected for a histogram, it must be numeric
+              if (yAxis && !numericColumns.includes(yAxis)) {
+                return true;
+              }
+            } else {
+              // For all other chart types, yAxis is required
+              if (!yAxis || !columns.includes(yAxis)) {
+                return true;
+              }
+            }
+            return false;
+          })()}
           className="px-4 py-2 text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50"
         >
           {isNewChart ? 'Create Chart' : 'Save Changes'}
