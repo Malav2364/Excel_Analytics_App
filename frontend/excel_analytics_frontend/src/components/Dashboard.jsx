@@ -48,6 +48,8 @@ function Dashboard() {
   const [showChartDialog, setShowChartDialog] = useState(false);
   const [editingChart, setEditingChart] = useState(null);
   const [loading, setLoading] = useState(false); // For file upload loading state
+  const [insights, setInsights] = useState(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
   const chartRefs = useRef({}); // To store refs to chart instances
 
   useEffect(() => {
@@ -90,6 +92,7 @@ function Dashboard() {
         setCharts([]);
         setLoadingFileDetails(false);
         chartRefs.current = {}; // Clear refs when no file is selected
+        setInsights(null);
         return;
       }
 
@@ -309,6 +312,39 @@ function Dashboard() {
     }
   };
 
+  const handleGenerateInsights = async () => {
+    if (!selectedFile) {
+      toast.error("Please select a file first.");
+      return;
+    }
+
+    setLoadingInsights(true);
+    setInsights(null);
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/ai/${selectedFile._id}/insights`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authService.getAccessToken()}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate insights');
+      }
+
+      const data = await response.json();
+      setInsights(data);
+      toast.success("AI insights generated successfully!");
+
+    } catch (error) {
+      console.error("Error generating AI insights:", error);
+      toast.error("Failed to generate AI insights.");
+    } finally {
+      setLoadingInsights(false);
+    }
+  };
+
   const renderChartComponent = (chart) => {
     const chartRef = el => (chartRefs.current[chart._id] = el);
     const chartProps = {
@@ -480,12 +516,61 @@ function Dashboard() {
                   }}
                   className="w-full mb-4 bg-green-600 hover:bg-green-700 text-white"
                   // Button is effectively enabled if this section is rendered.
-                  // disabled={loadingFileDetails || !selectedFile || !selectedFile.data || !selectedFile.headers || selectedFile.headers.length === 0}
+                  // disabled={loadingFileDetails || !selectedFile || !selectedFile.data || !selectedFile.headers || !selectedFile.headers.length === 0}
                 >
                   Create New Chart
                 </Button>
                 {/* Remove direct rendering of ChartConfig here */}
               </div>
+
+              {/* AI Insights Section */}
+              <div className="mt-6">
+                <h3 className="text-xl font-semibold mb-4 text-green-700 dark:text-green-400">AI-Powered Insights</h3>
+                <Button
+                  onClick={handleGenerateInsights}
+                  disabled={loadingInsights || !selectedFile?.data}
+                  className="w-full mb-4 bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {loadingInsights ? 'Generating...' : 'Generate AI Insights'}
+                </Button>
+                {loadingInsights && (
+                  <div className="flex items-center justify-center my-4">
+                    <div className="animate-spin h-6 w-6 border-4 border-blue-500 rounded-full border-t-transparent"></div>
+                    <span className="ml-3 text-blue-600 dark:text-blue-400">Analyzing data...</span>
+                  </div>
+                )}
+                {insights && (
+                  <Card className="p-4 bg-gray-50 dark:bg-gray-800">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="font-semibold text-lg">Summary</h4>
+                        <p className="text-gray-700 dark:text-gray-300">{insights.summary}</p>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-lg">Key Insight</h4>
+                        <p className="text-gray-700 dark:text-gray-300">{insights.insight}</p>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-lg">Chart Suggestion</h4>
+                        <p className="text-gray-700 dark:text-gray-300">{insights.chartSuggestion}</p>
+                      </div>
+                      {insights.fieldSuggestions && insights.fieldSuggestions.length > 0 && (
+                        <div>
+                          <h4 className="font-semibold text-lg">Field Suggestions</h4>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {insights.fieldSuggestions.map((field, index) => (
+                              <span key={index} className="bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-1 rounded-md text-sm font-mono">
+                                {field}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                )}
+              </div>
+
               <div>
                 <h3 className="text-xl font-semibold mb-4 text-green-700 dark:text-green-400">Existing Charts</h3>
                 {charts.length === 0 && !loadingFileDetails && (
