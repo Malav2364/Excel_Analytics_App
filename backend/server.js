@@ -6,6 +6,8 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import authRoutes from './routes/auth.js';
 import fileRoutes from './routes/files.js';
+import aiRoutes from './routes/ai.js';
+import adminRoutes from './routes/admin.js';
 
 // Load environment variables
 dotenv.config();
@@ -25,6 +27,8 @@ mongoose.connect(process.env.MONGODB_URI)
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/excel', fileRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

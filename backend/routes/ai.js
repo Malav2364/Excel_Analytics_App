@@ -1,7 +1,7 @@
 import express from 'express';
 import { generateInsights } from '../services/aiService.js';
 import File from '../models/File.js';
-import auth from '../middleware/auth.js';
+import { auth } from '../middleware/auth.js';
 
 const router = express.Router();
 

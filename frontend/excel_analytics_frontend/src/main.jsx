@@ -9,6 +9,7 @@ import App from './App.jsx'
 import SignupPage from './components/Signup_page'
 import LoginPage from './components/Login'
 import PrivateRoute from './components/PrivateRoute'
+import AdminDashboard from './components/AdminDashboard';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -18,15 +19,10 @@ createRoot(document.getElementById('root')).render(
             <Route path='/' element={<App/>}/>
             <Route path='/signup' element={<SignupPage/>}/>
             <Route path='/login' element={<LoginPage/>}/>
-            <Route 
-              path='/dashboard' 
-              element={
-                <PrivateRoute>
-                  <Dashboard/>
-                </PrivateRoute>
-              }/>
+            <Route path='/dashboard' element={<PrivateRoute><Dashboard/></PrivateRoute>}/>
+            <Route path='/admin/dashboard' element={<PrivateRoute><AdminDashboard/></PrivateRoute>}/>
         </Routes>
       </BrowserRouter>
     </ThemeProvider>
-  </StrictMode>,
+  </StrictMode>
 )

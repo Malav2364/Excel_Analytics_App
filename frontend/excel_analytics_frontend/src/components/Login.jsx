@@ -29,10 +29,14 @@ function LoginPage() {
     setLoading(true);
 
     try {
-      await authService.login(formData.email, formData.password);
+      const { user } = await authService.login(formData.email, formData.password);
       
-      // Redirect to dashboard
-      navigate('/dashboard');
+      // Redirect based on user role
+      if (user.role === 'admin') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       setError(err.message);
     } finally {

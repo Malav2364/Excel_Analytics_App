@@ -42,10 +42,7 @@ class AuthService {
             // Store token and user data
             localStorage.setItem('token', data.token);
             localStorage.setItem('user', JSON.stringify(data.user));
-            return {
-                success: true,
-                data: data
-            };
+            return data; // Return the user data directly
         } else {
             throw new Error(data.message || 'Login failed');
         }

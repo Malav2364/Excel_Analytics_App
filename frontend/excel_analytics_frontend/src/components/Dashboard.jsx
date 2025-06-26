@@ -37,6 +37,22 @@ import ScatterChart from './charts/ScatterChart'; // Import ScatterChart
 import AreaChart from './charts/AreaChart'; // Import AreaChart
 import HistogramChart from './charts/HistogramChart';
 
+// Helper components for icons
+const MenuIcon = (props) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  );
+  
+const XIcon = (props) => (
+<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 6 6 18" />
+    <path d="m6 6 12 12" />
+</svg>
+);
+
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -51,6 +67,7 @@ function Dashboard() {
   const [insights, setInsights] = useState(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const chartRefs = useRef({}); // To store refs to chart instances
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // State for mobile sidebar
 
   useEffect(() => {
     const currentUser = authService.getCurrentUser();
@@ -372,7 +389,7 @@ function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Toaster 
         position="top-right"
         toastOptions={{
@@ -398,6 +415,16 @@ function Dashboard() {
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
+              {/* Hamburger Menu Button - Mobile */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="lg:hidden"
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              >
+                <MenuIcon className="h-6 w-6" />
+                <span className="sr-only">Toggle sidebar</span>
+              </Button>
               <h1 className="text-xl font-bold text-green-700 dark:text-green-400">
                 ExcelAnalytics
               </h1>
@@ -440,192 +467,224 @@ function Dashboard() {
         </div>
       </nav>
 
-      <div className="container mx-auto p-4">
-        {/* File Upload Section - improved styling and convenience */}
-        <Card className="mb-6 p-6 flex flex-col md:flex-row items-center justify-between bg-gradient-to-r from-green-50 to-green-100 dark:from-black dark:to-neutral-900 border-2 border-green-200 dark:border-green-800 shadow-lg">
-          <div className="flex-1 mb-4 md:mb-0">
-            <h2 className="text-2xl font-bold mb-2 text-green-700 dark:text-green-400">
-              Upload Excel File
-            </h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-2">
-              Upload your Excel file to get started with analytics and charting.<br />
-              <span className="font-semibold">Supported formats:</span> <b>.xls, .xlsx</b> &nbsp;|&nbsp; <span className="font-semibold">Max size:</span> 5MB
-            </p>
+      {/* Overlay for mobile sidebar */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        ></div>
+      )}
+
+      <div className="flex flex-1 overflow-auto">
+        {/* Sidebar */}
+        <aside
+          className={`w-full max-w-xs flex-shrink-0 bg-card p-4 overflow-y-auto border-r dark:border-gray-700 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static fixed inset-y-0 left-0 z-40 ${
+            isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-green-700 dark:text-green-400">Your Files</h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
+              onClick={() => setIsSidebarOpen(false)}
+            >
+              <XIcon className="h-6 w-6" />
+              <span className="sr-only">Close sidebar</span>
+            </Button>
           </div>
-          <div className="flex flex-col items-center gap-2 w-full md:w-auto">
+          <div className="mb-4">
             <input
               type="file"
               accept=".xls,.xlsx"
               onChange={handleFileUpload}
               className="hidden"
-              id="file-upload"
-              ref={input => this && (this.fileInput = input)}
+              id="file-upload-sidebar"
             />
             <Button
-              className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white px-8 py-3 text-lg font-semibold shadow-md cursor-pointer"
+              className="w-full bg-green-600 hover:bg-green-700 text-white"
               disabled={loading}
-              onClick={() => document.getElementById('file-upload').click()}
+              onClick={() => document.getElementById('file-upload-sidebar').click()}
             >
-              {loading ? 'Uploading...' : 'Select File'}
+              {loading ? 'Uploading...' : 'Upload New File'}
             </Button>
           </div>
-        </Card>
+          <div className="flex flex-col gap-2">
+            {files.map((file) => (
+              <Card
+                key={file._id}
+                className={`p-3 cursor-pointer transition-all duration-200 ${selectedFile?._id === file._id ? 'border-green-500 border-2 shadow-lg' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
+                onClick={() => {
+                  setSelectedFile(file);
+                  if (window.innerWidth < 1024) { // lg breakpoint
+                    setIsSidebarOpen(false);
+                  }
+                }}
+              >
+                <h3 className="font-semibold truncate" title={file.fileName}>{file.fileName}</h3>
+                <p className="text-sm text-gray-500">
+                  Size: {(file.fileSize / 1024).toFixed(2)} KB
+                </p>
+              </Card>
+            ))}
+          </div>
+        </aside>
 
-      {/* Recent Files Section */}
-      <Card className="mb-6 p-4">
-        <h2 className="text-2xl font-bold mb-4">Recent Files</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {files.map((file) => (
-            <Card key={file._id} className="p-4 cursor-pointer hover:bg-gray-50"
-                  onClick={() => setSelectedFile(file)}>
-              <h3 className="font-semibold">{file.fileName}</h3>
-              <p className="text-sm text-gray-500">
-                Uploaded: {new Date(file.createdAt).toLocaleDateString()}
-              </p>
-              <p className="text-sm text-gray-500">
-                Size: {(file.fileSize / 1024).toFixed(2)} KB
-              </p>
-            </Card>
-          ))}
-        </div>
-      </Card>
-
-      {/* Data Visualization Section */}
-      {selectedFile && (
-        <Card className="p-4">
-          <h2 className="text-2xl font-bold mb-4">Data Visualization</h2>
-          {loadingFileDetails && (
-            <div className="flex items-center justify-center my-4">
-              <div className="animate-spin h-8 w-8 border-4 border-green-500 rounded-full border-t-transparent"></div>
-              <span className="ml-3 text-green-600 dark:text-green-400">Loading file data and charts...</span>
-            </div>
-          )}
-          {!loadingFileDetails && selectedFile.data && selectedFile.headers && selectedFile.headers.length > 0 && (
-            <div className="flex flex-col gap-6"> {/* Changed from grid to flex-col for vertical stacking */}
-              <div>
-                <h3 className="text-xl font-semibold mb-4 text-green-700 dark:text-green-400">Create New Chart</h3> {/* Styled title like Existing Charts */}
-                <Button
-                  onClick={() => {
-                    // Condition already checked by parent div, but good for safety
-                    if (selectedFile && selectedFile.data && selectedFile.headers && selectedFile.headers.length > 0) {
-                      setEditingChart(null); 
-                      setShowChartDialog(true);
-                    } else {
-                      toast.error("File data is not fully loaded or is invalid. Please wait or re-select the file.");
-                    }
-                  }}
-                  className="w-full mb-4 bg-green-600 hover:bg-green-700 text-white"
-                  // Button is effectively enabled if this section is rendered.
-                  // disabled={loadingFileDetails || !selectedFile || !selectedFile.data || !selectedFile.headers || !selectedFile.headers.length === 0}
-                >
-                  Create New Chart
-                </Button>
-                {/* Remove direct rendering of ChartConfig here */}
-              </div>
-
-              {/* AI Insights Section */}
-              <div className="mt-6">
-                <h3 className="text-xl font-semibold mb-4 text-green-700 dark:text-green-400">AI-Powered Insights</h3>
-                <Button
-                  onClick={handleGenerateInsights}
-                  disabled={loadingInsights || !selectedFile?.data}
-                  className="w-full mb-4 bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  {loadingInsights ? 'Generating...' : 'Generate AI Insights'}
-                </Button>
-                {loadingInsights && (
+        {/* Main Content */}
+        <main className="flex-1 p-6 overflow-y-auto">
+          {selectedFile ? (
+            <div>
+              <Card className="p-4">
+                <h2 className="text-2xl font-bold mb-4">Data Visualization for {selectedFile.fileName}</h2>
+                {loadingFileDetails && (
                   <div className="flex items-center justify-center my-4">
-                    <div className="animate-spin h-6 w-6 border-4 border-blue-500 rounded-full border-t-transparent"></div>
-                    <span className="ml-3 text-blue-600 dark:text-blue-400">Analyzing data...</span>
+                    <div className="animate-spin h-8 w-8 border-4 border-green-500 rounded-full border-t-transparent"></div>
+                    <span className="ml-3 text-green-600 dark:text-green-400">Loading file data and charts...</span>
                   </div>
                 )}
-                {insights && (
-                  <Card className="p-4 bg-gray-50 dark:bg-gray-800">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <h4 className="font-semibold text-lg">Summary</h4>
-                        <p className="text-gray-700 dark:text-gray-300">{insights.summary}</p>
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-lg">Key Insight</h4>
-                        <p className="text-gray-700 dark:text-gray-300">{insights.insight}</p>
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-lg">Chart Suggestion</h4>
-                        <p className="text-gray-700 dark:text-gray-300">{insights.chartSuggestion}</p>
-                      </div>
-                      {insights.fieldSuggestions && insights.fieldSuggestions.length > 0 && (
-                        <div>
-                          <h4 className="font-semibold text-lg">Field Suggestions</h4>
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {insights.fieldSuggestions.map((field, index) => (
-                              <span key={index} className="bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-1 rounded-md text-sm font-mono">
-                                {field}
-                              </span>
-                            ))}
-                          </div>
+                {!loadingFileDetails && selectedFile.data && selectedFile.headers && selectedFile.headers.length > 0 && (
+                  <div className="flex flex-col gap-6">
+                    <div>
+                      <h3 className="text-xl font-semibold mb-4 text-green-700 dark:text-green-400">Create New Chart</h3>
+                      <Button
+                        onClick={() => {
+                          if (selectedFile && selectedFile.data && selectedFile.headers && selectedFile.headers.length > 0) {
+                            setEditingChart(null); 
+                            setShowChartDialog(true);
+                          } else {
+                            toast.error("File data is not fully loaded or is invalid. Please wait or re-select the file.");
+                          }
+                        }}
+                        className="w-full mb-4 bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        Create New Chart
+                      </Button>
+                    </div>
+
+                    {/* AI Insights Section */}
+                    <div className="mt-6">
+                      <h3 className="text-xl font-semibold mb-4 text-green-700 dark:text-green-400">AI-Powered Insights</h3>
+                      <Button
+                        onClick={handleGenerateInsights}
+                        disabled={loadingInsights || !selectedFile?.data}
+                        className="w-full mb-4 bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        {loadingInsights ? 'Generating...' : 'Generate AI Insights'}
+                      </Button>
+                      {loadingInsights && (
+                        <div className="flex items-center justify-center my-4">
+                          <div className="animate-spin h-6 w-6 border-4 border-blue-500 rounded-full border-t-transparent"></div>
+                          <span className="ml-3 text-blue-600 dark:text-blue-400">Analyzing data...</span>
                         </div>
                       )}
+                      {insights && (
+                        <Card className="p-4 bg-gray-50 dark:bg-gray-800">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <h4 className="font-semibold text-lg">Summary</h4>
+                              <p className="text-gray-700 dark:text-gray-300">{insights.summary}</p>
+                            </div>
+                            <div>
+                              <h4 className="font-semibold text-lg">Key Insight</h4>
+                              <p className="text-gray-700 dark:text-gray-300">{insights.insight}</p>
+                            </div>
+                            <div>
+                              <h4 className="font-semibold text-lg">Chart Suggestion</h4>
+                              <p className="text-gray-700 dark:text-gray-300">{insights.chartSuggestion}</p>
+                            </div>
+                            {insights.fieldSuggestions && insights.fieldSuggestions.length > 0 && (
+                              <div>
+                                <h4 className="font-semibold text-lg">Field Suggestions</h4>
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  {insights.fieldSuggestions.map((field, index) => (
+                                    <span key={index} className="bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-1 rounded-md text-sm font-mono">
+                                      {field}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </Card>
+                      )}
                     </div>
-                  </Card>
-                )}
-              </div>
 
-              <div>
-                <h3 className="text-xl font-semibold mb-4 text-green-700 dark:text-green-400">Existing Charts</h3>
-                {charts.length === 0 && !loadingFileDetails && (
-                  <p className="text-gray-500 dark:text-gray-400">No charts created for this file yet. Click "Create New Chart" to get started!</p>
+                    <div>
+                      <h3 className="text-xl font-semibold mb-4 text-green-700 dark:text-green-400">Existing Charts</h3>
+                      {charts.length === 0 && !loadingFileDetails && (
+                        <p className="text-gray-500 dark:text-gray-400">No charts created for this file yet. Click "Create New Chart" to get started!</p>
+                      )}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {charts.map((chart) => (
+                          <Card key={chart._id} className="p-4 shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out dark:bg-gray-800">
+                            <h4 className="text-lg font-semibold mb-3 text-green-600 dark:text-green-300 truncate" title={chart.name}>{chart.name}</h4>
+                            <div className="chart-container h-64 w-full mb-3">
+                              {renderChartComponent(chart)}
+                            </div>
+                            <div className="flex justify-end gap-2 mt-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setShowChartDialog(true);
+                                  setEditingChart(chart);
+                                }}
+                                className="text-green-600 hover:text-green-700"
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDownloadChart(chart._id, chart.name)}
+                                className="text-blue-600 hover:text-blue-700"
+                              >
+                                Download
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteChart(chart._id)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 )}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {charts.map((chart) => (
-                    <Card key={chart._id} className="p-4 shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out dark:bg-gray-800">
-                      <h4 className="text-lg font-semibold mb-3 text-green-600 dark:text-green-300 truncate" title={chart.name}>{chart.name}</h4>
-                      <div className="chart-container h-64 w-full mb-3"> {/* Added a container with fixed height */}
-                        {renderChartComponent(chart)}
-                      </div>
-                      <div className="flex justify-end gap-2 mt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setShowChartDialog(true);
-                            setEditingChart(chart);
-                          }}
-                          className="text-green-600 hover:text-green-700"
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDownloadChart(chart._id, chart.name)}
-                          className="text-blue-600 hover:text-blue-700"
-                        >
-                          Download
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteChart(chart._id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </Card>
-                  ))}
+                {!loadingFileDetails && (!selectedFile.data || !selectedFile.headers || selectedFile.headers.length === 0) && (
+                  <div className="text-center py-4">
+                    <p className="text-gray-600 dark:text-gray-400">File data or headers are missing or empty. Cannot display visualizations.</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-500">Try re-selecting the file or uploading a valid Excel file.</p>
+                  </div>
+                )}
+              </Card>
+            </div>
+          ) : (
+            // Placeholder when no file is selected
+            <div className="flex items-center justify-center h-full">
+              <Card className="w-full h-full p-4 flex items-center justify-center bg-transparent border-2 border-dashed">
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300">Select a file to get started</h3>
+                  <p className="text-gray-500 mt-2">Your charts and AI insights will appear here.</p>
+                  <Button
+                    className="mt-4 bg-green-600 hover:bg-green-700 text-white"
+                    disabled={loading}
+                    onClick={() => document.getElementById('file-upload-sidebar').click()}
+                  >
+                    {loading ? 'Uploading...' : 'Upload File'}
+                  </Button>
                 </div>
-              </div>
+              </Card>
             </div>
           )}
-          {!loadingFileDetails && (!selectedFile.data || !selectedFile.headers || selectedFile.headers.length === 0) && (
-            <div className="text-center py-4">
-              <p className="text-gray-600 dark:text-gray-400">File data or headers are missing or empty. Cannot display visualizations.</p>
-              <p className="text-sm text-gray-500 dark:text-gray-500">Try re-selecting the file or uploading a valid Excel file.</p>
-            </div>
-          )}
-        </Card>
-      )}
+        </main>
+      </div>
 
       {/* Dialog for Chart Configuration */}
       {selectedFile && selectedFile.data && selectedFile.headers && selectedFile.headers.length > 0 && (
@@ -670,7 +729,6 @@ function Dashboard() {
           </DialogContent>
         </Dialog>
       )}
-    </div>
     </div>
   );
 }
